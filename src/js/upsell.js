@@ -9,7 +9,10 @@ const getOrder = async () => {
         
         const response = await fetch((ordersURL + refId + '/'), {
             method: 'GET',
-            headers,
+            headers: {
+                Accept: 'application/json',
+                Authorization: 'ojQkx0qVzFFTgHGtzRIMGxwstvf5QAfndrvwukzy'
+            }
         });
         const result = await response.json()
 
@@ -47,7 +50,11 @@ const createUpsell = async () => {
     try {
         const response = await fetch((ordersURL + refId + '/upsells/'), {
             method: 'POST',
-            headers,
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: 'ojQkx0qVzFFTgHGtzRIMGxwstvf5QAfndrvwukzy'
+            },
             body: JSON.stringify(orderData),
         });
         const result = await response.json()

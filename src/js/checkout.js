@@ -36,9 +36,11 @@ const getCampaign = async () => {
     console.log("get campaign");
     try {
 
-        const response = await fetch(campaignRetrieveURL, {
+        const response = await fetch('http://localhost:8000/api/campaign', {
             method: 'GET',
-            headers,
+            headers: {
+                Accept: 'application/json'
+            }
         });
         const data = await response.json()
 
@@ -86,15 +88,18 @@ const createCart = async () => {
     }
 
     try {
-        const response = await fetch(cartsCreateURL, {
+        const response = await fetch('http://localhost:8000/api/cart', {
             method: 'POST',
-            headers,
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json'
+            },
             body: JSON.stringify(cartData),
         });
         const result = await response.json()
 
         if (!response.ok) {
-            console.log('Something went wrong');
+            console.log('Something went wrong', result);
             return;
         }
 
@@ -106,19 +111,14 @@ const createCart = async () => {
 }
 
 
-/**
- * Use Create Order with Credit Card
- */
-
 const createOrder = async () => {
-
-    console.log("create order");
+    console.log("Criando pedido...");
     const formData = new FormData(formEl);
     const data = Object.fromEntries(formData);
 
     btnCC.disabled = true;
     btnCC.textContent = btnCC.dataset.loadingText;
-    validErrBlock.innerHTML = ``
+    validErrBlock.innerHTML = ``;
 
     const orderData = {
         "user": {
@@ -127,13 +127,11 @@ const createOrder = async () => {
             "email": data.email,
         },
         "lines": lineArr,
-
         "use_default_shipping_address": false,
-
         "use_default_billing_address": false,
-        "billing_same_as_shipping_address": data.billing_same_as_shipping_address,
+        "billing_same_as_shipping_address": data.billing_same_as_shipping_address === 'true',
         "payment_detail": {
-            "payment_method": data.payment_method,
+            "payment_method": data.payment_method || 'credit_card',
             "card_token": data.card_token,
         },
         "shipping_address": {
@@ -147,94 +145,50 @@ const createOrder = async () => {
             "country": data.shipping_country
         },
         "shipping_method": data.shipping_method,
-        "success_url": campaign.nextStep(nextURL)
-    }
+        "success_url": campaign.nextStep(nextURL),
+        "payment_failed_url": "http://127.0.0.1:5500/src/failed.html"  // Adicionando o URL de falha
+    };
 
-
-    console.log(orderData);
+    console.log('Dados do pedido:', orderData);
 
     try {
-        const response = await fetch(ordersURL, {
+        const response = await fetch('http://localhost:8000/api/order', {
             method: 'POST',
-            headers,
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+            },
             body: JSON.stringify(orderData),
         });
-        const result = await response.json()
 
-        // Some examples of error handling from the API to expand on
-        if (!response.ok && result.non_field_errors) {
+        const result = await response.json();
+        console.log('Resposta da API:', result);
 
+        if (!response.ok) {
+            console.log('Erro da API:', result);
+            validErrBlock.innerHTML = `Erro no pagamento: ${result.error.message}`;
             btnCC.disabled = false;
-            btnCC.textContent = btnCC.dataset.text;
-
-            console.log ('Something went wrong', result);
-            let error = result.non_field_errors;
-            validErrBlock.innerHTML = `
-                <div class="alert alert-danger">
-                    ${error}
-                </div>
-            `;
-            return;
-
-        } else if (!response.ok && result.postcode) {
-
-            btnCC.disabled = false;
-            btnCC.textContent = btnCC.dataset.text;
-
-            console.log ('ZIP is incorrect', result);
-            let error = result.postcode;
-            validErrBlock.innerHTML = `
-                <div class="alert alert-danger">
-                    API Response Error: ${error}
-                </div>
-            `;
-            return;
-        
-        } else if (!response.ok && result.shipping_address) {
-
-            btnCC.disabled = false;
-            btnCC.textContent = btnCC.dataset.text;
-
-            console.log ('Phone number is not accepted', result);
-            let error = result.shipping_address.phone_number;
-            validErrBlock.innerHTML = `
-                <div class="alert alert-danger">
-                    API Response Error: ${error}
-                </div>
-            `;
-            return;
-        
-        } else if (!response.ok) {
-            
-            btnCC.disabled = false;
-            btnCC.textContent = btnCC.dataset.text;
-            
-            console.log ('Something went wrong', result);
-            let error = Object.values(result)[0];
-            document.getElementById("payment-error-block").innerHTML = `
-                <div class="alert alert-danger">
-                    ${error}
-                </div>
-            `;
+            btnCC.textContent = 'Pagar agora';  // Resetar o texto do botão
             return;
         }
 
         sessionStorage.setItem('ref_id', result.ref_id);
 
-        if (!result.payment_complete_url && result.number) {
-
-            location.href = campaign.nextStep(nextURL);
-
-        } else if (result.payment_complete_url) {
-
-            window.location.href = result.payment_complete_url;
+        // Redirecionamento com base na resposta da API
+        if (result.payment_complete_url) {
+            window.location.href = result.payment_complete_url;  // Sucesso no pagamento
+        } else if (!result.payment_complete_url && result.number) {
+            window.location.href = campaign.nextStep(nextURL);  // Avançar sem redirecionamento específico
         }
 
     } catch (error) {
-        console.log(error);
+        console.log('Erro ao processar o pedido:', error);
+        validErrBlock.innerHTML = `Erro inesperado ao processar o pedido. Tente novamente.`;
+        btnCC.disabled = false;
+        btnCC.textContent = 'Pagar agora';
     }
+};
 
-}
 
 /**
  * Use Create Order with PayPal
@@ -244,48 +198,56 @@ const createPayPalOrder = async () => {
     console.log("create order paypal order");
     const formData = new FormData(formEl);
     const data = Object.fromEntries(formData);
-    btnPaypal.disabled = true;
+    
+    btnPaypal.disabled = true;  
+
     const orderPPData = {
         "user": {
             "first_name": data.first_name,
             "last_name": data.last_name,
             "email": data.email,
         },
-        "lines": lineArr,
+        "lines": lineArr,  
         "payment_detail": {
-            "payment_method": data.payment_method,
+            "payment_method": 'paypal', 
         },
-        "shipping_method": data.shipping_method,
+        "shipping_method": data.shipping_method,  
         "success_url": campaign.nextStep(nextURL)
-    }
+        
+    };
 
     try {
-        const response = await fetch(ordersURL, {
+        const response = await fetch('http://localhost:8000/api/order', {
             method: 'POST',
-            headers,
-            body: JSON.stringify(orderPPData),
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(orderPPData), 
         });
-        const result = await response.json()
+
+        const result = await response.json();
 
         if (!response.ok) {
-            console.log('Something went wrong');
-            console.log(orderPPData);
+
+            console.log('Erro da API:', result);
+            console.log('Dados enviados:', orderPPData);
             btnPaypal.disabled = false;
             return;
         }
 
-        console.log(result)
+        console.log('Pedido PayPal criado:', result);
 
-        sessionStorage.setItem('ref_id', result.ref_id);
+        sessionStorage.setItem('ref_id', result.ref_id);  
 
-        window.location.href = result.payment_complete_url;
+        window.location.href = result.payment_complete_url; 
 
     } catch (error) {
-        console.log(error);
+        console.log('Erro ao processar o pedido PayPal:', error);
+        btnPaypal.disabled = false; 
     }
-
-
 }
+
 const retrieveCampaign = campaign.once(getCampaign);
 
 retrieveCampaign();
