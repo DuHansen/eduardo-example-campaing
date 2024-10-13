@@ -4,8 +4,7 @@
   "description": "An example of a simple campaign that demostrates the a straight forward integration with the 29next Campaigns App",
   "main": "index.html",
   "scripts": {
-    "start": "npm run open",
-    "open": "concurrently \"http-server -p 8000\" \"open http://localhost:8000/\""
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -20,5 +19,10 @@
   "devDependencies": {
     "concurrently": "^8.2.0",
     "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "node-fetch": "^3.3.2"
   }
 }
